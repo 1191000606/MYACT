@@ -1,0 +1,3 @@
+./checkpoints
+./data/pick_place_us
+./wandb

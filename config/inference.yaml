@@ -1,0 +1,16 @@
+checkpoint_path: ./checkpoints/2025-05-12-01-17-55/best_model.pth
+
+task_name: pick_place_us
+temporal_agg: True
+chunk_size: 32
+
+img_front_topic: /camera_f/color/image_raw
+img_left_topic: /camera_l/color/image_raw
+img_right_topic: /camera_r/color/image_raw
+
+
+# puppet_arm_left_topic, puppet_arm_right_topic
+# publish_rate
+# arm_steps_length
+# use_actions_interpolation
+

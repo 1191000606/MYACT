@@ -1,0 +1,36 @@
+dataset_dir: ./data
+checkpoint_dir: ./checkpoints
+load_model_path: ./checkpoints/2025-05-12-00-20-00/best_model.pth
+load_preprocess_dataset: True
+
+task_name: pick_place_us
+episode_num: 50
+camera_names: ['cam_high', 'cam_left_wrist', 'cam_right_wrist']
+
+batch_size: 96
+seed: 0
+epoch_num: 10
+learning_rate: 0.00004
+weight_decay: 0.0001
+backbone_learning_rate: 0.00004
+dropout: 0.1
+
+state_dimension: 14
+loss_function: l1
+encoder_layer_num: 4
+decoder_layer_num: 7
+head_num: 8
+pre_normalization: False
+hidden_dimension: 512
+
+feed_forward_dimension: 3200
+
+kl_weight: 10
+chunk_size: 32
+
+# temporal_agg, arm_delay_time
+
+dilation: False
+position_embedding: sine
+masks: False
+backbone: resnet18

@@ -8,9 +8,14 @@ img_front_topic: /camera_f/color/image_raw
 img_left_topic: /camera_l/color/image_raw
 img_right_topic: /camera_r/color/image_raw
 
+puppet_arm_left_topic: /puppet/joint_left
+puppet_arm_right_topic: /puppet/joint_right
 
-# puppet_arm_left_topic, puppet_arm_right_topic
-# publish_rate
-# arm_steps_length
-# use_actions_interpolation
+frame_rate: 30
 
+
+# publish_rate: 40
+# arm_steps_length: [0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.2]
+# use_actions_interpolation: False
+# max_publish_step: 10000
+# pos_lookahead_step: 0

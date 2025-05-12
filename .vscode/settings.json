@@ -1,7 +1,15 @@
 {
     "cSpell.words": [
         "detr",
+        "imgmsg",
         "logvar",
-        "qpos"
+        "nodelay",
+        "numpy",
+        "opencv",
+        "popleft",
+        "qpos",
+        "rospy",
+        "timestep",
+        "torchvision"
     ]
 }

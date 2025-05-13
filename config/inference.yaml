@@ -14,8 +14,10 @@ puppet_arm_right_topic: /puppet/joint_right
 frame_rate: 30
 
 
-# publish_rate: 40
+publish_rate: 40
+max_publish_step: 350 # max_episode length
+state_dimension: 14
+pos_lookahead_step: 0
+use_actions_interpolation: True
+
 # arm_steps_length: [0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.2]
-# use_actions_interpolation: False
-# max_publish_step: 10000
-# pos_lookahead_step: 0

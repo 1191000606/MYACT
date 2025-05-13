@@ -8,3 +8,4 @@ opencv-python
 numpy
 rospy
 torchvision
+einops

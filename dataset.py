@@ -46,7 +46,7 @@ class EpisodicDataset(torch.utils.data.Dataset):
 
                 images = np.stack(images, axis=1)
                 images = torch.from_numpy(images)
-                images = torch.einsum("l k h w c -> l k c h w", images)
+                images = torch.einsum("l k h w c -> l k c h w", images)  # 这一步可以直接使用from einops import rearrange
                 images = images / 255.0
 
                 qpos_list.append(qpos)
@@ -63,8 +63,8 @@ class EpisodicDataset(torch.utils.data.Dataset):
 
     def normalize(self, qpos):
         return (qpos - self.qpos_mean) / self.qpos_std
-    
-    def re_normalize(self, qpos):
+
+    def denormalize(self, qpos):
         return qpos * self.qpos_std + self.qpos_mean
 
     def __len__(self):

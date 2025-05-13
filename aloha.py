@@ -40,6 +40,15 @@ class RosOperator:
         rospy.Subscriber(self.config["puppet_arm_left_topic"], JointState, self.puppet_arm_left_callback, queue_size=1000, tcp_nodelay=True)
         rospy.Subscriber(self.config["puppet_arm_right_topic"], JointState, self.puppet_arm_right_callback, queue_size=1000, tcp_nodelay=True)
 
+    def setup_puppet_arm(self):
+        left0 = [-0.00133514404296875, 0.00209808349609375, 0.01583099365234375, -0.032616615295410156, -0.00286102294921875, 0.00095367431640625, 3.557830810546875]
+        right0 = [-0.00133514404296875, 0.00438690185546875, 0.034523963928222656, -0.053597450256347656, -0.00476837158203125, -0.00209808349609375, 3.557830810546875]
+        left1 = [-0.00133514404296875, 0.00209808349609375, 0.01583099365234375, -0.032616615295410156, -0.00286102294921875, 0.00095367431640625, -0.3393220901489258]
+        right1 = [-0.00133514404296875, 0.00247955322265625, 0.01583099365234375, -0.032616615295410156, -0.00286102294921875, 0.00095367431640625, -0.3397035598754883]
+
+        self.puppet_arm_publish_continuous(left0, right0)
+        input("Enter any key to continue :")
+        self.puppet_arm_publish_continuous(left1, right1)
 
     def puppet_arm_publish(self, left, right):
         joint_state_msg = JointState()
@@ -55,7 +64,7 @@ class RosOperator:
 
     def puppet_arm_publish_continuous(self, left, right):
         rate = rospy.Rate(self.config["publish_rate"])
-        
+
         left_arm = None
         right_arm = None
         while True and not rospy.is_shutdown():
@@ -68,10 +77,10 @@ class RosOperator:
                 continue
             else:
                 break
-        
+
         left_symbol = [1 if left[i] - left_arm[i] > 0 else -1 for i in range(len(left))]
         right_symbol = [1 if right[i] - right_arm[i] > 0 else -1 for i in range(len(right))]
-        
+
         flag = True
         step = 0
         while flag and not rospy.is_shutdown():
@@ -92,7 +101,7 @@ class RosOperator:
                 else:
                     right_arm[i] += right_symbol[i] * self.config["arm_steps_length"][i]
                     flag = True
-            
+
             joint_state_msg = JointState()
             joint_state_msg.header = Header()
             joint_state_msg.header.stamp = rospy.Time.now()
@@ -193,7 +202,7 @@ class RosOperator:
             self.puppet_arm_right_deque.popleft()
         puppet_arm_right = self.puppet_arm_right_deque.popleft()
 
-        return (img_front, img_left, img_right, puppet_arm_left, puppet_arm_right)
+        return img_front, img_left, img_right, puppet_arm_left, puppet_arm_right
 
     def img_left_callback(self, msg):
         if len(self.img_left_deque) >= 2000:

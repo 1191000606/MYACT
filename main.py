@@ -26,4 +26,3 @@ if __name__ == '__main__':
     model = train_model(config, train_dataloader, valid_dataloader) 
 
 # Todo: 目前机械臂还是用的关节空间的坐标系，后续需要换成末端执行器的坐标系
-# Todo: 对图像数据的处理是不是也漏了

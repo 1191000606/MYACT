@@ -28,8 +28,8 @@ class RosOperator:
         
         rospy.init_node("joint_state_publisher", anonymous=True)
 
-        self.puppet_arm_left_publisher = rospy.Publisher(self.config["puppet_arm_left_cmd_topic"], JointState, queue_size=10)
-        self.puppet_arm_right_publisher = rospy.Publisher(self.config["puppet_arm_right_cmd_topic"], JointState, queue_size=10)
+        self.puppet_arm_left_publisher = rospy.Publisher(self.config["puppet_arm_left_topic"], JointState, queue_size=10)
+        self.puppet_arm_right_publisher = rospy.Publisher(self.config["puppet_arm_right_topic"], JointState, queue_size=10)
 
         self.puppet_arm_publish_thread = None
         self.puppet_arm_publish_lock = threading.Lock()

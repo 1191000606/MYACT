@@ -42,8 +42,8 @@ def inference_process(config, ros_operator, model, t, pre_action):
         img_front, img_left, img_right, puppet_arm_left, puppet_arm_right = result
 
         qpos = np.concatenate((np.array(puppet_arm_left.position), np.array(puppet_arm_right.position)), axis=0)
-        qpos = denormalize(qpos)
-        qpos = torch.from_numpy(qpos).float().cuda().unsqueeze(0)
+        qpos = normalize(qpos)
+        qpos = torch.from_numpy(qpos).float().cuda()
 
         curr_images = []
         for image in [img_front, img_left, img_right]:
@@ -51,30 +51,29 @@ def inference_process(config, ros_operator, model, t, pre_action):
             curr_images.append(curr_image)
         
         curr_image = np.stack(curr_images, axis=0)
-        curr_image = torch.from_numpy(curr_image / 255.0).float().cuda().unsqueeze(0)
+        curr_image = torch.from_numpy(curr_image / 255.0).float().cuda()
 
         start_time = time.time()
-        all_actions = model(qpos, curr_image)
+        all_actions = model(qpos.unsqueeze(0), curr_image.unsqueeze(0))[0]
         end_time = time.time()
         print("model cost time: ", end_time - start_time)
         inference_lock.acquire()
-        inference_actions = all_actions.cpu().detach().numpy()
-        if pre_action is None:
-            pre_action = qpos.cpu().detach().numpy()
-
+        inference_actions = denormalize(all_actions.cpu().detach().numpy())
+        
         if config["use_actions_interpolation"]:
+            if pre_action is None:
+                pre_action = denormalize(qpos.cpu().detach().numpy())
+                
             inference_actions = actions_interpolation(config, pre_action, inference_actions)
         inference_timestep = t
         inference_lock.release()
         break
 
 
-def actions_interpolation(config, pre_action, actions):
-    # pre_action应该是（14， ）,但是这里的pre_action是（1， 14）
+def actions_interpolation(config, pre_action, post_action):
     steps = np.concatenate((np.array(config["arm_steps_length"]), np.array(config["arm_steps_length"])), axis=0)
 
     result = [pre_action]
-    post_action = denormalize(actions[0])
 
     max_diff_index = 0
     max_diff = -1

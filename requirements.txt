@@ -5,7 +5,8 @@ wandb
 debugpy
 h5py
 opencv-python
-numpy
+numpy==1.21.5
 rospy
 torchvision
 einops
+packaging

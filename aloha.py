@@ -1,8 +1,6 @@
 from collections import deque
 import threading
-
 import numpy as np
-
 import rospy
 from cv_bridge import CvBridge
 from sensor_msgs.msg import Image
@@ -20,8 +18,18 @@ class RosOperator:
 
         self.puppet_arm_right_deque = deque()
         self.puppet_arm_left_deque = deque()
-        self.puppet_arm_left_publisher = None
-        self.puppet_arm_right_publisher = None
+
+        rospy.Subscriber(self.config["img_left_topic"], Image, self.img_left_callback, queue_size=1000, tcp_nodelay=True)
+        rospy.Subscriber(self.config["img_right_topic"], Image, self.img_right_callback, queue_size=1000, tcp_nodelay=True)
+        rospy.Subscriber(self.config["img_front_topic"], Image, self.img_front_callback, queue_size=1000, tcp_nodelay=True)
+
+        rospy.Subscriber(self.config["puppet_arm_left_topic"], JointState, self.puppet_arm_left_callback, queue_size=1000, tcp_nodelay=True)
+        rospy.Subscriber(self.config["puppet_arm_right_topic"], JointState, self.puppet_arm_right_callback, queue_size=1000, tcp_nodelay=True)
+        
+        rospy.init_node("joint_state_publisher", anonymous=True)
+
+        self.puppet_arm_left_publisher = rospy.Publisher(self.config["puppet_arm_left_cmd_topic"], JointState, queue_size=10)
+        self.puppet_arm_right_publisher = rospy.Publisher(self.config["puppet_arm_right_cmd_topic"], JointState, queue_size=10)
 
         self.puppet_arm_publish_thread = None
         self.puppet_arm_publish_lock = threading.Lock()
@@ -30,15 +38,6 @@ class RosOperator:
         self.ctrl_state = False
         self.ctrl_state_lock = threading.Lock()
 
-        self.init_ros()
-
-        rospy.init_node("joint_state_publisher", anonymous=True)
-        rospy.Subscriber(self.config["img_left_topic"], Image, self.img_left_callback, queue_size=1000, tcp_nodelay=True)
-        rospy.Subscriber(self.config["img_right_topic"], Image, self.img_right_callback, queue_size=1000, tcp_nodelay=True)
-        rospy.Subscriber(self.config["img_front_topic"], Image, self.img_front_callback, queue_size=1000, tcp_nodelay=True)
-
-        rospy.Subscriber(self.config["puppet_arm_left_topic"], JointState, self.puppet_arm_left_callback, queue_size=1000, tcp_nodelay=True)
-        rospy.Subscriber(self.config["puppet_arm_right_topic"], JointState, self.puppet_arm_right_callback, queue_size=1000, tcp_nodelay=True)
 
     def setup_puppet_arm(self):
         left0 = [-0.00133514404296875, 0.00209808349609375, 0.01583099365234375, -0.032616615295410156, -0.00286102294921875, 0.00095367431640625, 3.557830810546875]
@@ -90,7 +89,7 @@ class RosOperator:
             right_diff = [abs(right[i] - right_arm[i]) for i in range(len(right))]
             flag = False
             for i in range(len(left)):
-                if left_diff[i] < self.args.arm_steps_length[i]:
+                if left_diff[i] < self.config["arm_steps_length"][i]:
                     left_arm[i] = left[i]
                 else:
                     left_arm[i] += left_symbol[i] * self.config["arm_steps_length"][i]

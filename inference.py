@@ -1,4 +1,3 @@
-import collections
 import math
 import threading
 import time
@@ -102,7 +101,7 @@ def actions_interpolation(config, pre_action, actions):
     return result
 
 if __name__ == "__main__":
-    with open("config.yaml", "r") as f:
+    with open("./config/inference.yaml", "r") as f:
         config = yaml.safe_load(f)
 
     ros_operator = RosOperator(config)

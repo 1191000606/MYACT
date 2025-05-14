@@ -1,15 +1,19 @@
-checkpoint_path: ./checkpoints/2025-05-12-01-17-55/best_model.pth
+load_model_path: ./checkpoints/2025-05-12-01-17-55/best_model.pth
 
 task_name: pick_place_us
 temporal_agg: True
 chunk_size: 32
 
+camera_names: ['cam_high', 'cam_left_wrist', 'cam_right_wrist']
 img_front_topic: /camera_f/color/image_raw
 img_left_topic: /camera_l/color/image_raw
 img_right_topic: /camera_r/color/image_raw
 
 puppet_arm_left_topic: /puppet/joint_left
 puppet_arm_right_topic: /puppet/joint_right
+
+puppet_arm_left_cmd_topic: /master/joint_left
+puppet_arm_right_cmd_topic: /master/joint_right
 
 frame_rate: 30
 
@@ -19,5 +23,20 @@ max_publish_step: 350 # max_episode length
 state_dimension: 14
 pos_lookahead_step: 0
 use_actions_interpolation: True
+arm_steps_length: [0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.2]
 
-# arm_steps_length: [0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.2]
+# 以下用于确定模型结构
+state_dimension: 14
+encoder_layer_num: 4
+decoder_layer_num: 7
+head_num: 8
+pre_normalization: False
+hidden_dimension: 512
+feed_forward_dimension: 3200
+dropout: 0.1
+backbone_learning_rate: 0.00004
+masks: False
+backbone: resnet18
+dilation: False
+position_embedding: sine
+kl_weight: 10

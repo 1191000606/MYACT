@@ -66,6 +66,8 @@ class RosOperator:
 
         left_arm = None
         right_arm = None
+
+        # 获取当前的从臂关节位置
         while True and not rospy.is_shutdown():
             if len(self.puppet_arm_left_deque) != 0:
                 left_arm = list(self.puppet_arm_left_deque[-1].position)
@@ -76,7 +78,8 @@ class RosOperator:
                 continue
             else:
                 break
-
+        
+        # 计算从臂关节位置到目标位置的符号
         left_symbol = [1 if left[i] - left_arm[i] > 0 else -1 for i in range(len(left))]
         right_symbol = [1 if right[i] - right_arm[i] > 0 else -1 for i in range(len(right))]
 
@@ -85,15 +88,23 @@ class RosOperator:
         while flag and not rospy.is_shutdown():
             if self.puppet_arm_publish_lock.acquire(False):
                 return
+            
+            # 每个关节的变化量
             left_diff = [abs(left[i] - left_arm[i]) for i in range(len(left))]
             right_diff = [abs(right[i] - right_arm[i]) for i in range(len(right))]
+            
+            # 如果左从臂、右从臂的每个关节的变化量都小于步长，则Flag为False，也表示这一次循环完成后就到达目标位置了
             flag = False
+            
+            # 如果当前关节位置和目标位置的差值小于步长，则直接赋值。超过步长，则按照步长进行更新
+            # 这里的步长是一个常数，表示每次更新的最大幅度
             for i in range(len(left)):
                 if left_diff[i] < self.config["arm_steps_length"][i]:
                     left_arm[i] = left[i]
                 else:
                     left_arm[i] += left_symbol[i] * self.config["arm_steps_length"][i]
                     flag = True
+            
             for i in range(len(right)):
                 if right_diff[i] < self.config["arm_steps_length"][i]:
                     right_arm[i] = right[i]
@@ -122,6 +133,7 @@ class RosOperator:
         left_arm = None
         right_arm = None
 
+        # 获取当前的从臂关节位置
         while True and not rospy.is_shutdown():
             if len(self.puppet_arm_left_deque) != 0:
                 left_arm = list(self.puppet_arm_left_deque[-1].position)
@@ -132,10 +144,12 @@ class RosOperator:
                 continue
             else:
                 break
-
+        
+        # 计算从臂关节位置到目标位置的线性插值
         trajectory_left_list = np.linspace(left_arm, left, num_step)
         trajectory_right_list = np.linspace(right_arm, right, num_step)
 
+        # 发布每个插值点，插值点的夹爪状态和目标点一致，其他维度就是线性插值
         for i in range(len(trajectory_left_list)):
             trajectory_left = trajectory_left_list[i]
             trajectory_right = trajectory_right_list[i]

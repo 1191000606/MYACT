@@ -54,7 +54,7 @@ def inference_process(config, ros_operator, model, t, pre_action):
         curr_image = torch.from_numpy(curr_image / 255.0).float().cuda().unsqueeze(0)
 
         start_time = time.time()
-        all_actions = model(curr_image, qpos)
+        all_actions = model(qpos, curr_image)
         end_time = time.time()
         print("model cost time: ", end_time - start_time)
         inference_lock.acquire()
@@ -70,7 +70,8 @@ def inference_process(config, ros_operator, model, t, pre_action):
 
 
 def actions_interpolation(config, pre_action, actions):
-    steps = np.concatenate((np.array(config.arm_steps_length), np.array(config.arm_steps_length)), axis=0)
+    # pre_action应该是（14， ）,但是这里的pre_action是（1， 14）
+    steps = np.concatenate((np.array(config["arm_steps_length"]), np.array(config["arm_steps_length"])), axis=0)
 
     result = [pre_action]
     post_action = denormalize(actions[0])
@@ -115,6 +116,7 @@ if __name__ == "__main__":
 
     ros_operator.setup_puppet_arm()
 
+    action = None
     with torch.inference_mode():
         while True and not rospy.is_shutdown():
             # 每个回合的步数

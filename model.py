@@ -50,7 +50,7 @@ class ACT(nn.Module):
 
     def forward(self, current_joint, images, qpos_chunk=None):
         is_training = qpos_chunk is not None
-        batch_size, _ = current_joint.shape
+        batch_size = current_joint.shape[0]
 
         # Obtain latent z from action sequence
         if is_training and self.kl_weight != 0:  # hidden_dim输入参数是512

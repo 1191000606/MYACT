@@ -1,4 +1,5 @@
 from collections import deque
+import math
 import threading
 import numpy as np
 import rospy
@@ -18,6 +19,10 @@ class RosOperator:
 
         self.puppet_arm_right_deque = deque()
         self.puppet_arm_left_deque = deque()
+        
+        self.img_deque_list = [self.img_front_deque, self.img_right_deque, self.img_left_deque]
+        self.puppet_arm_deque_list = [self.puppet_arm_left_deque, self.puppet_arm_right_deque]
+        self.deque_list = self.img_deque_list + self.puppet_arm_deque_list
 
         rospy.Subscriber(self.config["img_left_topic"], Image, self.img_left_callback, queue_size=1000, tcp_nodelay=True)
         rospy.Subscriber(self.config["img_right_topic"], Image, self.img_right_callback, queue_size=1000, tcp_nodelay=True)
@@ -35,10 +40,6 @@ class RosOperator:
         self.puppet_arm_publish_lock = threading.Lock()
         self.puppet_arm_publish_lock.acquire()
 
-        self.ctrl_state = False
-        self.ctrl_state_lock = threading.Lock()
-
-
     def setup_puppet_arm(self):
         left0 = [-0.00133514404296875, 0.00209808349609375, 0.01583099365234375, -0.032616615295410156, -0.00286102294921875, 0.00095367431640625, 3.557830810546875]
         right0 = [-0.00133514404296875, 0.00438690185546875, 0.034523963928222656, -0.053597450256347656, -0.00476837158203125, -0.00209808349609375, 3.557830810546875]
@@ -49,121 +50,68 @@ class RosOperator:
         input("Enter any key to continue :")
         self.puppet_arm_publish_continuous(left1, right1)
 
-    def puppet_arm_publish(self, left, right):
+    def puppet_arm_publish(self, left_target, right_target):
         joint_state_msg = JointState()
         joint_state_msg.header = Header()
         joint_state_msg.header.stamp = rospy.Time.now()
         joint_state_msg.name = ["joint0", "joint1", "joint2", "joint3", "joint4", "joint5", "joint6"]
-        joint_state_msg.effort = [0] * 14
-        joint_state_msg.velocity = [0] * 14
-        joint_state_msg.position = left
+        joint_state_msg.position = left_target
         self.puppet_arm_left_publisher.publish(joint_state_msg)
-        joint_state_msg.position = right
+        joint_state_msg.position = right_target
         self.puppet_arm_right_publisher.publish(joint_state_msg)
 
-    def puppet_arm_publish_continuous(self, left, right): # 是否这个函数就实现了actions_interpolation的功能
+    def puppet_arm_publish_continuous(self, left_target, right_target):
         rate = rospy.Rate(self.config["publish_rate"])
 
-        left_arm = None
-        right_arm = None
+        state_dimension = len(left_target)
 
-        # 获取当前的从臂关节位置
-        while True and not rospy.is_shutdown():
+        current_left = None
+        current_right = None
+        
+        while not rospy.is_shutdown():
             if len(self.puppet_arm_left_deque) != 0:
-                left_arm = list(self.puppet_arm_left_deque[-1].position)
+                current_left = list(self.puppet_arm_left_deque[-1].position)
+            
             if len(self.puppet_arm_right_deque) != 0:
-                right_arm = list(self.puppet_arm_right_deque[-1].position)
-            if left_arm is None or right_arm is None:
+                current_right = list(self.puppet_arm_right_deque[-1].position)
+            
+            if current_left is None or current_right is None:
                 rate.sleep()
                 continue
             else:
                 break
         
-        # 计算从臂关节位置到目标位置的符号
-        left_symbol = [1 if left[i] - left_arm[i] > 0 else -1 for i in range(len(left))]
-        right_symbol = [1 if right[i] - right_arm[i] > 0 else -1 for i in range(len(right))]
+        step_num = 0
+        for i in range(state_dimension):
+            left_require_step_num = math.floor(abs(left_target[i] - current_left[i]) / self.config["arm_steps_length"][i])
+            right_require_step_num = math.floor(abs(right_target[i] - current_right[i]) / self.config["arm_steps_length"][i])
 
-        flag = True
-        step = 0
-        while flag and not rospy.is_shutdown():
-            if self.puppet_arm_publish_lock.acquire(False):
+            if left_require_step_num > step_num:
+                step_num = left_require_step_num
+            if right_require_step_num > step_num:
+                step_num = right_require_step_num
+
+        left_via_list = np.linspace(current_left, left_target, step_num)
+        right_via_list = np.linspace(current_right, right_target, step_num)
+
+        for i in range(step_num):
+            if rospy.is_shutdown():
                 return
             
-            # 每个关节的变化量
-            left_diff = [abs(left[i] - left_arm[i]) for i in range(len(left))]
-            right_diff = [abs(right[i] - right_arm[i]) for i in range(len(right))]
-            
-            # 如果左从臂、右从臂的每个关节的变化量都小于步长，则Flag为False，也表示这一次循环完成后就到达目标位置了
-            flag = False
-            
-            # 如果当前关节位置和目标位置的差值小于步长，则直接赋值。超过步长，则按照步长进行更新
-            # 这里的步长是一个常数，表示每次更新的最大幅度
-            for i in range(len(left)):
-                if left_diff[i] < self.config["arm_steps_length"][i]: # arm_steps_length为（7,），表示每一个关节每一步位移的最大值
-                    left_arm[i] = left[i]
-                else:
-                    left_arm[i] += left_symbol[i] * self.config["arm_steps_length"][i]
-                    flag = True
-            
-            for i in range(len(right)):
-                if right_diff[i] < self.config["arm_steps_length"][i]:
-                    right_arm[i] = right[i]
-                else:
-                    right_arm[i] += right_symbol[i] * self.config["arm_steps_length"][i]
-                    flag = True
+            left_via_point = left_via_list[i]
+            right_via_point = right_via_list[i]
 
             joint_state_msg = JointState()
             joint_state_msg.header = Header()
             joint_state_msg.header.stamp = rospy.Time.now()
             joint_state_msg.name = ["joint0", "joint1", "joint2", "joint3", "joint4", "joint5", "joint6"]
-            joint_state_msg.effort = [0] * 7
-            joint_state_msg.velocity = [0] * 7
-            joint_state_msg.position = left_arm
+            joint_state_msg.position = left_via_point
             self.puppet_arm_left_publisher.publish(joint_state_msg)
-            joint_state_msg.position = right_arm
+            joint_state_msg.position = right_via_point
             self.puppet_arm_right_publisher.publish(joint_state_msg)
-            step += 1
-            print("puppet_arm_publish_continuous:", step)
+
             rate.sleep()
 
-    def puppet_arm_publish_linear(self, left, right):
-        num_step = 100
-        rate = rospy.Rate(200)
-
-        left_arm = None
-        right_arm = None
-
-        # 获取当前的从臂关节位置
-        while True and not rospy.is_shutdown():
-            if len(self.puppet_arm_left_deque) != 0:
-                left_arm = list(self.puppet_arm_left_deque[-1].position)
-            if len(self.puppet_arm_right_deque) != 0:
-                right_arm = list(self.puppet_arm_right_deque[-1].position)
-            if left_arm is None or right_arm is None:
-                rate.sleep()
-                continue
-            else:
-                break
-        
-        # 计算从臂关节位置到目标位置的线性插值
-        trajectory_left_list = np.linspace(left_arm, left, num_step)
-        trajectory_right_list = np.linspace(right_arm, right, num_step)
-
-        # 发布每个插值点，插值点的夹爪状态和目标点一致，其他维度就是线性插值
-        for i in range(len(trajectory_left_list)):
-            trajectory_left = trajectory_left_list[i]
-            trajectory_right = trajectory_right_list[i]
-            trajectory_left[-1] = left[-1]
-            trajectory_right[-1] = right[-1]
-            joint_state_msg = JointState()
-            joint_state_msg.header = Header()
-            joint_state_msg.header.stamp = rospy.Time.now()
-            joint_state_msg.name = ["joint0", "joint1", "joint2", "joint3", "joint4", "joint5", "joint6"]
-            joint_state_msg.position = trajectory_left
-            self.puppet_arm_left_publisher.publish(joint_state_msg)
-            joint_state_msg.position = trajectory_right
-            self.puppet_arm_right_publisher.publish(joint_state_msg)
-            rate.sleep()
 
     def puppet_arm_publish_continuous_thread(self, left, right):
         if self.puppet_arm_publish_thread is not None:
@@ -175,47 +123,36 @@ class RosOperator:
         self.puppet_arm_publish_thread.start()
 
     def get_frame(self):
-        if (len(self.img_left_deque) == 0 or len(self.img_right_deque) == 0 or len(self.img_front_deque) == 0):
-            return False
+        # 队列不为空
+        for deque in self.deque_list:
+            if len(deque) == 0:
+                return False
 
-        frame_time = min([
-            self.img_left_deque[-1].header.stamp.to_sec(), 
-            self.img_right_deque[-1].header.stamp.to_sec(), 
-            self.img_front_deque[-1].header.stamp.to_sec()
-        ])
+        # 获取最新时间戳
+        frame_time = min([deque[0].header.stamp.to_sec() for deque in self.img_deque_list])
 
-        if len(self.img_left_deque) == 0 or self.img_left_deque[-1].header.stamp.to_sec() < frame_time:
-            return False
-        if len(self.img_right_deque) == 0 or self.img_right_deque[-1].header.stamp.to_sec() < frame_time:
-            return False
-        if len(self.img_front_deque) == 0 or self.img_front_deque[-1].header.stamp.to_sec() < frame_time:
-            return False
-        if len(self.puppet_arm_left_deque) == 0 or self.puppet_arm_left_deque[-1].header.stamp.to_sec() < frame_time:
-            return False
-        if len(self.puppet_arm_right_deque) == 0 or self.puppet_arm_right_deque[-1].header.stamp.to_sec() < frame_time:
-            return False
+        # 确认该时间戳可以获取到数据
+        for deque in self.deque_list:
+            if deque[0].header.stamp.to_sec() > frame_time:
+                return False
 
-        while self.img_left_deque[0].header.stamp.to_sec() < frame_time:
-            self.img_left_deque.popleft()
-        img_left = self.bridge.imgmsg_to_cv2(self.img_left_deque.popleft(), "passthrough")
+        # 去掉过期数据
+        for deque in self.deque_list:
+            while len(deque) > 0 and deque[0].header.stamp.to_sec() < frame_time:
+                deque.popleft()
+            
+            if len(deque) == 0:
+                return False
 
-        while self.img_right_deque[0].header.stamp.to_sec() < frame_time:
-            self.img_right_deque.popleft()
-        img_right = self.bridge.imgmsg_to_cv2(self.img_right_deque.popleft(), "passthrough")
-
-        while self.img_front_deque[0].header.stamp.to_sec() < frame_time:
-            self.img_front_deque.popleft()
-        img_front = self.bridge.imgmsg_to_cv2(self.img_front_deque.popleft(), "passthrough")
-
-        while self.puppet_arm_left_deque[0].header.stamp.to_sec() < frame_time:
-            self.puppet_arm_left_deque.popleft()
-        puppet_arm_left = self.puppet_arm_left_deque.popleft()
-
-        while self.puppet_arm_right_deque[0].header.stamp.to_sec() < frame_time:
-            self.puppet_arm_right_deque.popleft()
-        puppet_arm_right = self.puppet_arm_right_deque.popleft()
-
-        return img_front, img_left, img_right, puppet_arm_left, puppet_arm_right
+        # 获取该时间戳的数据
+        frame = []        
+        for deque in self.img_deque_list:
+            frame.append(self.bridge.imgmsg_to_cv2(deque.popleft(), "passthrough"))
+        
+        for deque in self.puppet_arm_deque_list:
+            frame.append(deque.popleft())
+        
+        return frame
 
     def img_left_callback(self, msg):
         if len(self.img_left_deque) >= 2000:
@@ -241,14 +178,3 @@ class RosOperator:
         if len(self.puppet_arm_right_deque) >= 2000:
             self.puppet_arm_right_deque.popleft()
         self.puppet_arm_right_deque.append(msg)
-
-    def ctrl_callback(self, msg):
-        self.ctrl_state_lock.acquire()
-        self.ctrl_state = msg.data
-        self.ctrl_state_lock.release()
-
-    def get_ctrl_state(self):
-        self.ctrl_state_lock.acquire()
-        state = self.ctrl_state
-        self.ctrl_state_lock.release()
-        return state

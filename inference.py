@@ -78,6 +78,7 @@ def actions_interpolation(config, pre_action, post_action):
     max_diff_index = 0
     max_diff = -1
     for i in range(post_action.shape[0]):
+        # 一次性生成chunk_size个动作，这里是在看chunk_size中哪个动作，关节角累计变化量最大
         diff = 0
         for j in range(pre_action.shape[0]):
             if j == 6 or j == 13:
@@ -87,14 +88,14 @@ def actions_interpolation(config, pre_action, post_action):
             max_diff = diff
             max_diff_index = i
 
-    for i in range(max_diff_index, post_action.shape[0]):
-        step = max([math.floor(math.fabs(result[-1][j] - post_action[i][j]) / steps[j]) for j in range(pre_action.shape[0])])
+    for i in range(max_diff_index, post_action.shape[0]): # chunk_size个动作是时序的，然后其中两个动作之前就通过下面这个再进行平滑。
+        step = max([math.floor(math.fabs(result[-1][j] - post_action[i][j]) / steps[j]) for j in range(pre_action.shape[0])]) # 最多只让移动一个step，每个关节角都是，那么就根据关节角计算出每个关节角需要多少个step，然后取一个最大的数字，就是两个动作之间需要多少step
         inter = np.linspace(result[-1], post_action[i], step + 2)
         result.extend(inter[1:])
 
     while len(result) < config["chunk_size"] + 1:
         result.append(result[-1])
-    result = np.array(result)[1 : config["chunk_size"] + 1]  # Updated from args.chunk_size to config["chunk_size"]
+    result = np.array(result)[1 : config["chunk_size"] + 1]
     # print("actions_interpolation2:", result.shape, result[:, 7:])
     result = normalize(result)
     result = result[np.newaxis, :]
@@ -118,7 +119,6 @@ if __name__ == "__main__":
     action = None
     with torch.inference_mode():
         while True and not rospy.is_shutdown():
-            # 每个回合的步数
             t = 0
             max_t = 0
 

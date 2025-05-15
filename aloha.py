@@ -61,7 +61,7 @@ class RosOperator:
         joint_state_msg.position = right
         self.puppet_arm_right_publisher.publish(joint_state_msg)
 
-    def puppet_arm_publish_continuous(self, left, right):
+    def puppet_arm_publish_continuous(self, left, right): # 是否这个函数就实现了actions_interpolation的功能
         rate = rospy.Rate(self.config["publish_rate"])
 
         left_arm = None
@@ -99,7 +99,7 @@ class RosOperator:
             # 如果当前关节位置和目标位置的差值小于步长，则直接赋值。超过步长，则按照步长进行更新
             # 这里的步长是一个常数，表示每次更新的最大幅度
             for i in range(len(left)):
-                if left_diff[i] < self.config["arm_steps_length"][i]:
+                if left_diff[i] < self.config["arm_steps_length"][i]: # arm_steps_length为（7,），表示每一个关节每一步位移的最大值
                     left_arm[i] = left[i]
                 else:
                     left_arm[i] += left_symbol[i] * self.config["arm_steps_length"][i]

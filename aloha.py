@@ -36,10 +36,6 @@ class RosOperator:
         self.puppet_arm_left_publisher = rospy.Publisher(self.config["puppet_arm_left_topic"], JointState, queue_size=10)
         self.puppet_arm_right_publisher = rospy.Publisher(self.config["puppet_arm_right_topic"], JointState, queue_size=10)
 
-        self.puppet_arm_publish_thread = None
-        self.puppet_arm_publish_lock = threading.Lock()
-        self.puppet_arm_publish_lock.acquire()
-
     def setup_puppet_arm(self):
         left0 = [-0.00133514404296875, 0.00209808349609375, 0.01583099365234375, -0.032616615295410156, -0.00286102294921875, 0.00095367431640625, 3.557830810546875]
         right0 = [-0.00133514404296875, 0.00438690185546875, 0.034523963928222656, -0.053597450256347656, -0.00476837158203125, -0.00209808349609375, 3.557830810546875]
@@ -95,9 +91,6 @@ class RosOperator:
         right_via_list = np.linspace(current_right, right_target, step_num)
 
         for i in range(step_num):
-            if rospy.is_shutdown():
-                return
-            
             left_via_point = left_via_list[i]
             right_via_point = right_via_list[i]
 
@@ -111,16 +104,6 @@ class RosOperator:
             self.puppet_arm_right_publisher.publish(joint_state_msg)
 
             rate.sleep()
-
-
-    def puppet_arm_publish_continuous_thread(self, left, right):
-        if self.puppet_arm_publish_thread is not None:
-            self.puppet_arm_publish_lock.release()
-            self.puppet_arm_publish_thread.join()
-            self.puppet_arm_publish_lock.acquire(False)
-            self.puppet_arm_publish_thread = None
-        self.puppet_arm_publish_thread = threading.Thread(target=self.puppet_arm_publish_continuous, args=(left, right))
-        self.puppet_arm_publish_thread.start()
 
     def get_frame(self):
         # 队列不为空

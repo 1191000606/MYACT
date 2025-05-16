@@ -58,8 +58,6 @@ class RosOperator:
     def puppet_arm_publish_continuous(self, left_target, right_target):
         rate = rospy.Rate(self.config["publish_rate"])
 
-        state_dimension = len(left_target)
-
         current_left = None
         current_right = None
         
@@ -77,7 +75,7 @@ class RosOperator:
                 break
         
         step_num = 0
-        for i in range(state_dimension):
+        for i in range(len(left_target)):
             left_require_step_num = math.floor(abs(left_target[i] - current_left[i]) / self.config["arm_steps_length"][i])
             right_require_step_num = math.floor(abs(right_target[i] - current_right[i]) / self.config["arm_steps_length"][i])
 
@@ -111,7 +109,7 @@ class RosOperator:
                 return None
 
         # 获取最新时间戳
-        frame_time = min([deque[0].header.stamp.to_sec() for deque in self.img_deque_list])
+        frame_time = min([deque[-1].header.stamp.to_sec() for deque in self.deque_list])
 
         # 确认该时间戳可以获取到数据
         for deque in self.deque_list:
@@ -132,7 +130,7 @@ class RosOperator:
             frame.append(self.bridge.imgmsg_to_cv2(deque.popleft(), "passthrough"))
         
         for deque in self.puppet_arm_deque_list:
-            frame.append(deque.popleft())
+            frame.append(deque.popleft().position)
         
         return frame
 

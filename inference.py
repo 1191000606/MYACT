@@ -18,7 +18,7 @@ def inference(model, ros_operator):
     
     img_front, img_left, img_right, puppet_arm_left, puppet_arm_right = frame
 
-    qpos = np.concatenate((np.array(puppet_arm_left.position), np.array(puppet_arm_right.position)), axis=0)
+    qpos = np.concatenate((np.array(puppet_arm_left), np.array(puppet_arm_right)), axis=0)
     qpos = normalize(qpos)
     qpos = torch.from_numpy(qpos).float().cuda()
 
@@ -52,7 +52,7 @@ if __name__ == "__main__":
         while True and not rospy.is_shutdown():
             rate = rospy.Rate(config["publish_rate"])
 
-            aggregate_action_array = np.zeros((config["episode_length"] + config["chunk_size"], config["state_dimension"]), dtype=np.float32)
+            aggregate_action_array = np.zeros((config["episode_length"] + config["chunk_size"], config["state_dimension"]), dtype=np.float64)
 
             current_time = 0
 

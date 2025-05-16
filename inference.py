@@ -1,6 +1,3 @@
-import math
-import threading
-import time
 import numpy as np
 import torch
 import yaml
@@ -16,90 +13,26 @@ qpos_std = [0.01594464, 0.04671929, 0.01, 0.01, 0.01, 0.01, 0.01, 0.28153193, 0.
 normalize = lambda x: (x - qpos_mean) / qpos_std
 denormalize = lambda x: x * qpos_std + qpos_mean
 
-inference_lock = threading.Lock()
-inference_actions = None
-inference_timestep = None
-inference_thread = None
+def inference(model, ros_operator):
+    frame = ros_operator.get_frame()
+    
+    img_front, img_left, img_right, puppet_arm_left, puppet_arm_right = frame
 
-def inference_process(config, ros_operator, model, t, pre_action):
-    global inference_lock
-    global inference_actions
-    global inference_timestep
-    print_flag = True
+    qpos = np.concatenate((np.array(puppet_arm_left.position), np.array(puppet_arm_right.position)), axis=0)
+    qpos = normalize(qpos)
+    qpos = torch.from_numpy(qpos).float().cuda()
 
-    rate = rospy.Rate(config["publish_rate"])
+    curr_images = []
+    for image in [img_front, img_left, img_right]:
+        curr_image = rearrange(image, "h w c -> c h w")
+        curr_images.append(curr_image)
+    
+    curr_image = np.stack(curr_images, axis=0)
+    curr_image = torch.from_numpy(curr_image / 255.0).float().cuda()
 
-    while True and not rospy.is_shutdown():
-        result = ros_operator.get_frame()
-        if not result:
-            if print_flag:
-                print("syn fail")
-                print_flag = False
-            rate.sleep()
-            continue
-        print_flag = True
+    chunk_actions = model(qpos.unsqueeze(0), curr_image.unsqueeze(0))[0]
 
-        img_front, img_left, img_right, puppet_arm_left, puppet_arm_right = result
-
-        qpos = np.concatenate((np.array(puppet_arm_left.position), np.array(puppet_arm_right.position)), axis=0)
-        qpos = normalize(qpos)
-        qpos = torch.from_numpy(qpos).float().cuda()
-
-        curr_images = []
-        for image in [img_front, img_left, img_right]:
-            curr_image = rearrange(image, "h w c -> c h w")
-            curr_images.append(curr_image)
-        
-        curr_image = np.stack(curr_images, axis=0)
-        curr_image = torch.from_numpy(curr_image / 255.0).float().cuda()
-
-        start_time = time.time()
-        all_actions = model(qpos.unsqueeze(0), curr_image.unsqueeze(0))[0]
-        end_time = time.time()
-        print("model cost time: ", end_time - start_time)
-        inference_lock.acquire()
-        inference_actions = denormalize(all_actions.cpu().detach().numpy())
-        
-        if config["use_actions_interpolation"]:
-            if pre_action is None:
-                pre_action = denormalize(qpos.cpu().detach().numpy())
-                
-            inference_actions = actions_interpolation(config, pre_action, inference_actions)
-        inference_timestep = t
-        inference_lock.release()
-        break
-
-
-def actions_interpolation(config, pre_action, post_action):
-    steps = np.concatenate((np.array(config["arm_steps_length"]), np.array(config["arm_steps_length"])), axis=0)
-
-    result = [pre_action]
-
-    max_diff_index = 0
-    max_diff = -1
-    for i in range(post_action.shape[0]):
-        # 一次性生成chunk_size个动作，这里是在看chunk_size中哪个动作，关节角累计变化量最大
-        diff = 0
-        for j in range(pre_action.shape[0]):
-            if j == 6 or j == 13:
-                continue
-            diff += math.fabs(pre_action[j] - post_action[i][j])
-        if diff > max_diff:
-            max_diff = diff
-            max_diff_index = i
-
-    for i in range(max_diff_index, post_action.shape[0]): # chunk_size个动作是时序的，然后其中两个动作之前就通过下面这个再进行平滑。
-        step = max([math.floor(math.fabs(result[-1][j] - post_action[i][j]) / steps[j]) for j in range(pre_action.shape[0])]) # 最多只让移动一个step，每个关节角都是，那么就根据关节角计算出每个关节角需要多少个step，然后取一个最大的数字，就是两个动作之间需要多少step
-        inter = np.linspace(result[-1], post_action[i], step + 2)
-        result.extend(inter[1:])
-
-    while len(result) < config["chunk_size"] + 1:
-        result.append(result[-1])
-    result = np.array(result)[1 : config["chunk_size"] + 1]
-    # print("actions_interpolation2:", result.shape, result[:, 7:])
-    result = normalize(result)
-    result = result[np.newaxis, :]
-    return result
+    return denormalize(chunk_actions.cpu().detach().numpy())
 
 if __name__ == "__main__":
     with open("./config/inference.yaml", "r") as f:
@@ -112,65 +45,33 @@ if __name__ == "__main__":
     model.deserialize(torch.load(config["load_model_path"]))
 
     model.cuda()
-    model.eval()
 
     ros_operator.setup_puppet_arm()
 
-    action = None
     with torch.inference_mode():
         while True and not rospy.is_shutdown():
-            t = 0
-            max_t = 0
-
             rate = rospy.Rate(config["publish_rate"])
 
-            if config["temporal_agg"]:
-                all_time_actions = np.zeros([config["max_publish_step"], config["max_publish_step"] + config["chunk_size"], config["state_dimension"]])
+            aggregate_action_array = np.zeros((config["episode_length"] + config["chunk_size"], config["state_dimension"]), dtype=np.float32)
 
-            while t < config["max_publish_step"] and not rospy.is_shutdown():
-                if t >= max_t:
-                    pre_action = action
-                    inference_thread = threading.Thread(target=inference_process, args=(config, ros_operator, model, t, pre_action))
-                    inference_thread.start()
-                    inference_thread.join()
+            current_time = 0
 
-                    inference_lock.acquire()
-                    if inference_actions is not None:
-                        inference_thread = None
-                        all_actions = inference_actions
-                        inference_actions = None
-                        max_t = t + config["pos_lookahead_step"]
-                        if config["temporal_agg"]:
-                            all_time_actions[[t], t : t + config["chunk_size"]] = all_actions
-                    inference_lock.release()
+            while current_time < config["episode_length"]:
+                if current_time % config["inference_interval"] == 0:
+                    chunk_actions = inference(model, ros_operator)
 
-                if config["temporal_agg"]:
-                    actions_for_curr_step = all_time_actions[:, t]
-                    actions_populated = np.all(actions_for_curr_step != 0, axis=1)
-                    actions_for_curr_step = actions_for_curr_step[actions_populated]
-                    k = 0.01
-                    exp_weights = np.exp(-k * np.arange(len(actions_for_curr_step)))
-                    exp_weights = exp_weights / exp_weights.sum()
-                    exp_weights = exp_weights[:, np.newaxis]
-                    raw_action = (actions_for_curr_step * exp_weights).sum(axis=0, keepdims=True)
-                else:
-                    if config["pos_lookahead_step"] != 0:
-                        raw_action = all_actions[:, t % config["pos_lookahead_step"]]
-                    else:
-                        raw_action = all_actions[:, t % config["chunk_size"]]
+                    aggregate_action_array[current_time:current_time + config["chunk_size"], :] = chunk_actions * config["aggregate_decay"] + aggregate_action_array[current_time:current_time + config["chunk_size"], :] * (1 - config["aggregate_decay"])
+                
+                ros_operator.puppet_arm_publish_continuous(aggregate_action_array[current_time][:7], aggregate_action_array[current_time][7:])
 
-                action = denormalize(raw_action[0])
-                left_action = action[:7]  # 取7维度
-                right_action = action[7:14]
-                left_action[-1:] *= 13
-                right_action[-1:] *= 13
-                # left_action[-1:] = 0.5
-                ros_operator.puppet_arm_publish(left_action, right_action)  # puppet_arm_publish_continuous_thread
-
-                t += 1
-                # end_time = time.time()
-                # print("publish: ", t)
-                # print("time:", end_time - start_time)
-                # print("left_action:", left_action)
-                # print("right_action:", right_action)
+                current_time += 1
+                
                 rate.sleep()
+                
+
+
+
+
+
+
+

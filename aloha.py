@@ -1,6 +1,5 @@
 from collections import deque
 import math
-import threading
 import numpy as np
 import rospy
 from cv_bridge import CvBridge
@@ -109,7 +108,7 @@ class RosOperator:
         # 队列不为空
         for deque in self.deque_list:
             if len(deque) == 0:
-                return False
+                return None
 
         # 获取最新时间戳
         frame_time = min([deque[0].header.stamp.to_sec() for deque in self.img_deque_list])
@@ -117,7 +116,7 @@ class RosOperator:
         # 确认该时间戳可以获取到数据
         for deque in self.deque_list:
             if deque[0].header.stamp.to_sec() > frame_time:
-                return False
+                return None
 
         # 去掉过期数据
         for deque in self.deque_list:
@@ -125,7 +124,7 @@ class RosOperator:
                 deque.popleft()
             
             if len(deque) == 0:
-                return False
+                return None
 
         # 获取该时间戳的数据
         frame = []        

@@ -12,13 +12,11 @@ img_right_topic: /camera_r/color/image_raw
 puppet_arm_left_topic: /puppet/joint_left
 puppet_arm_right_topic: /puppet/joint_right
 
-frame_rate: 30
-
-
+inference_interval: 8
+aggregate_decay: 0.7
 publish_rate: 40
-max_publish_step: 350 # max_episode length
-state_dimension: 14
-pos_lookahead_step: 0
+episode_length: 350
+
 use_actions_interpolation: True
 arm_steps_length: [0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.2]
 

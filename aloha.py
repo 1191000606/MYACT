@@ -23,17 +23,24 @@ class RosOperator:
         self.puppet_arm_deque_list = [self.puppet_arm_left_deque, self.puppet_arm_right_deque]
         self.deque_list = self.img_deque_list + self.puppet_arm_deque_list
 
+        # rospy.Subscriber表示订阅该信道，可以从该信道获取信息。roslaunch astra_camera multi_camera.launch之后，这三个信道都会有图像信息
         rospy.Subscriber(self.config["img_left_topic"], Image, self.img_left_callback, queue_size=1000, tcp_nodelay=True)
         rospy.Subscriber(self.config["img_right_topic"], Image, self.img_right_callback, queue_size=1000, tcp_nodelay=True)
         rospy.Subscriber(self.config["img_front_topic"], Image, self.img_front_callback, queue_size=1000, tcp_nodelay=True)
 
+        # 这里表示定义从臂信息。roslaunch arm_control puppet.launch之后，这两个信道都会有信息
         rospy.Subscriber(self.config["puppet_arm_left_topic"], JointState, self.puppet_arm_left_callback, queue_size=1000, tcp_nodelay=True)
         rospy.Subscriber(self.config["puppet_arm_right_topic"], JointState, self.puppet_arm_right_callback, queue_size=1000, tcp_nodelay=True)
         
         rospy.init_node("joint_state_publisher", anonymous=True)
 
-        self.puppet_arm_left_publisher = rospy.Publisher(self.config["puppet_arm_left_topic"], JointState, queue_size=10)
-        self.puppet_arm_right_publisher = rospy.Publisher(self.config["puppet_arm_right_topic"], JointState, queue_size=10)
+        # 这里表示发布信息，从臂会从/master/joint_left，/mater/joint_right信道获取信息，然后基于获取的信息控制自身。这种情况下不能再roslaunch arm_control master.launch了，不然会有会有两个地方向/master信道发消息，一个是来自与遥操作的物理主臂的变化，一个是这里的ACT模型的推理，这样会导致冲突。
+        self.puppet_arm_left_publisher = rospy.Publisher(self.config["puppet_arm_left_cmd_topic"], JointState, queue_size=10)
+        self.puppet_arm_right_publisher = rospy.Publisher(self.config["puppet_arm_right_cmd_topic"], JointState, queue_size=10)
+
+        # 不过的话，如果研究reply_action的代码，就会发现，reply需要roslaunch arm_control puppet.launch，但是不能launch master.launch。然后在reply_action.py代码中，会有puppet_arm_publisher，和master_arm_publisher。这样的话只有一个地方向master信道发消息，就是reply_action.py中的master_arm_publisher。至于从臂，从臂会从/master/joint信道获取信息，然后基于获取到的信息控制自身。然后从臂自身位置的变化也会发布到/puppet_arm信道上。reply_action.py代码中又一个puppet_arm_publisher发消息，不会因为冲突导致程序结束，不过至少会导致puppet_arm信道上消息频率翻倍。不过reply的过程中不会从从臂信道采集信息，所以就还好
+
+        # 这里的act程序是会从从臂信道采集数据的。
 
     def setup_puppet_arm(self):
         left0 = [-0.00133514404296875, 0.00209808349609375, 0.01583099365234375, -0.032616615295410156, -0.00286102294921875, 0.00095367431640625, 3.557830810546875]
@@ -86,6 +93,9 @@ class RosOperator:
 
         left_via_list = np.linspace(current_left, left_target, step_num)
         right_via_list = np.linspace(current_right, right_target, step_num)
+
+        print("left_move: ", np.array(current_left) - np.array(left_target))
+        print("right_move: ", np.array(current_right) - np.array(right_target))
 
         for i in range(step_num):
             left_via_point = left_via_list[i]

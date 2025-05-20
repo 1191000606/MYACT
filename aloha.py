@@ -57,6 +57,8 @@ class RosOperator:
         joint_state_msg.header = Header()
         joint_state_msg.header.stamp = rospy.Time.now()
         joint_state_msg.name = ["joint0", "joint1", "joint2", "joint3", "joint4", "joint5", "joint6"]
+        joint_state_msg.effort = [0] * 7
+        joint_state_msg.velocity = [0] * 7
         joint_state_msg.position = left_target
         self.puppet_arm_left_publisher.publish(joint_state_msg)
         joint_state_msg.position = right_target
@@ -105,6 +107,8 @@ class RosOperator:
             joint_state_msg.header = Header()
             joint_state_msg.header.stamp = rospy.Time.now()
             joint_state_msg.name = ["joint0", "joint1", "joint2", "joint3", "joint4", "joint5", "joint6"]
+            joint_state_msg.effort = [0] * 7
+            joint_state_msg.velocity = [0] * 7
             joint_state_msg.position = left_via_point
             self.puppet_arm_left_publisher.publish(joint_state_msg)
             joint_state_msg.position = right_via_point

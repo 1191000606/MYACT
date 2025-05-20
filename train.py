@@ -1,6 +1,5 @@
 import numpy as np
 import torch
-from eval import evaluate_loss
 from tqdm import tqdm
 import time
 from model import ACT
@@ -29,14 +28,14 @@ def train_model(config, train_dataloader, valid_dataloader):
 
     best_valid_loss = float("inf")
     if config["load_model_path"] is not None:
-        best_valid_loss = evaluate_loss(model, valid_dataloader)
+        best_valid_loss = validate(model, valid_dataloader)
         print(f"Initial validation loss: {best_valid_loss:.4f}")
 
     for epoch in range(config["epoch_num"]):
         start = time.time()
 
         train_loss = train(model, train_dataloader, optimizer)
-        valid_loss = evaluate_loss(model, valid_dataloader)
+        valid_loss = validate(model, valid_dataloader)
 
         end = time.time()
         duration = end - start
@@ -81,3 +80,20 @@ def train(model, train_dataloader, optimizer):
         train_loss += loss.item()
     
     return train_loss / len(train_dataloader)
+
+
+def validate(model, valid_dataloader):
+    with torch.inference_mode():
+        model.eval()
+
+        valid_loss = 0.0
+
+        for current_joint, images, qpos_chunk in valid_dataloader:
+            current_joint, images, qpos_chunk = current_joint.cuda(), images.cuda(), qpos_chunk.cuda()
+            loss, _ = model(current_joint, images, qpos_chunk)
+
+            valid_loss += loss.item()
+
+            wandb.log({"batch_valid_loss": loss.item()})
+
+        return valid_loss / len(valid_dataloader)

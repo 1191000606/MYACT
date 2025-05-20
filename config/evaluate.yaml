@@ -1,0 +1,30 @@
+dataset_dir: ./data
+load_model_path: ./checkpoints/2025-05-12-01-17-55/best_model.pth
+load_preprocess_dataset: False
+
+task_name: pick_place_us
+batch_size: 96
+episode_num: 50
+
+chunk_size: 32
+
+camera_names: ['cam_high', 'cam_left_wrist', 'cam_right_wrist']
+img_front_topic: /camera_f/color/image_raw
+img_left_topic: /camera_l/color/image_raw
+img_right_topic: /camera_r/color/image_raw
+
+# 以下用于确定模型结构
+state_dimension: 14
+encoder_layer_num: 4
+decoder_layer_num: 7
+head_num: 8
+pre_normalization: False
+hidden_dimension: 512
+feed_forward_dimension: 3200
+dropout: 0.1
+backbone_learning_rate: 0.00004
+masks: False
+backbone: resnet18
+dilation: False
+position_embedding: sine
+kl_weight: 10
